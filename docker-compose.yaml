@@ -22,24 +22,36 @@ services:
       - "5002/tcp"
     ports:
       - "127.0.0.1:5002:5002/tcp"
-    command: "exec core -config /ella/core.yaml"
+    command:
+      - exec
+      - /bin/sh
+      - -c
+      - |
+        ip r c default via ${ROUTER_IP} && \
+        core -config /ella/core.yaml
     privileged: true
     ulimits:
       memlock: -1
     sysctls:
       - net.ipv4.conf.all.forwarding=1
+      - net.ipv4.conf.all.accept_local=1
       #- net.ipv6.conf.all.disable_ipv6=0
     networks:
-      core:
+      zcore:
         ipv4_address: ${AMF_IP}
+      default:
+        ipv4_address: ${UPF_IP}
   upf-routes:
     image: nicolaka/netshoot
     #network_mode: host
+    depends_on:
+      - core
     privileged: true
     container_name: upf-routes
     sysctls:
       - net.ipv4.conf.all.forwarding=1
       - net.ipv4.conf.all.accept_local=1
+      - net.ipv4.conf.all.send_redirects=0
     env_file:
       - .env
     command:
@@ -51,7 +63,7 @@ services:
         echo "done"
         tail -f /dev/null
     networks:
-      core:
+      default:
         ipv4_address: ${ROUTER_IP}
   nr_gnb:
     #image: docker_ueransim
@@ -77,7 +89,7 @@ services:
       - NET_ADMIN
     privileged: true
     networks:
-      core:
+      zcore:
         ipv4_address: ${NR_GNB_IP}
   nr_ue:
     #image: docker_ueransim
@@ -102,7 +114,7 @@ services:
       - NET_ADMIN
     privileged: true
     networks:
-      core:
+      zcore:
         ipv4_address: ${NR_UE_IP}
 #    networks:
 #      default:
@@ -112,8 +124,14 @@ services:
     #external: true
     #name: docker_open5gs_default
 networks:
-  core:
+  default:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.22.0.0/24
+        - subnet: ${DEFAULT_NETWORK}
+  zcore:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: ${ZCORE_NETWORK}

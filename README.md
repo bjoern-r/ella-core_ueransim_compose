@@ -10,3 +10,5 @@
      MSIN: `1234567895`
      Ki: `8baf473f2f8fd09487cccbd7097c6862`
  - restart docker compose
+ - test datapath in UE container
+   - `docker exec -it nr_ue ping -I uesimtun0 8.8.8.8 -c2`

@@ -8,12 +8,12 @@ db:
   path: "/ella/core.db"
 interfaces:
   n2:
-    name: "eth0"
+    name: "eth1"
     port: 38412
   n3:
-    name: "eth0"
+    name: "eth1"
   n6:
-    name: "lo"
+    name: "eth0"
   api:
     name: "eth0"
     port: 5002
