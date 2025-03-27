@@ -1,0 +1,119 @@
+# docker run --rm ghcr.io/ellanetworks/ella-core:v0.0.13
+
+#version: '3'
+services:
+  core:
+    image: ghcr.io/ellanetworks/ella-core:v0.0.13
+    container_name: core
+    env_file:
+      - .env
+    volumes:
+      - ./ella:/ella
+      - /sys/fs/bpf:/sys/fs/bpf
+      - /sys/kernel/debug:/sys/kernel/debug:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    expose:
+      - "2152/udp"
+      - "38412/sctp"
+      - "5002/tcp"
+    ports:
+      - "127.0.0.1:5002:5002/tcp"
+    command: "exec core -config /ella/core.yaml"
+    privileged: true
+    ulimits:
+      memlock: -1
+    sysctls:
+      - net.ipv4.conf.all.forwarding=1
+      #- net.ipv6.conf.all.disable_ipv6=0
+    networks:
+      core:
+        ipv4_address: ${AMF_IP}
+  upf-routes:
+    image: nicolaka/netshoot
+    #network_mode: host
+    privileged: true
+    container_name: upf-routes
+    sysctls:
+      - net.ipv4.conf.all.forwarding=1
+      - net.ipv4.conf.all.accept_local=1
+    env_file:
+      - .env
+    command:
+      - /bin/sh
+      - -c
+      - |
+        ip ro add ${UE_IPV4_SUBNET} via ${UPF_IP} && \
+        iptables -t nat -A POSTROUTING -s ${UE_IPV4_SUBNET} -j MASQUERADE && \
+        echo "done"
+        tail -f /dev/null
+    networks:
+      core:
+        ipv4_address: ${ROUTER_IP}
+  nr_gnb:
+    #image: docker_ueransim
+    image: ghcr.io/herlesupreeth/docker_ueransim:master
+    container_name: nr_gnb
+    depends_on:
+      - core
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./ueransim:/mnt/ueransim
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=ueransim-gnb
+    expose:
+      - "38412/sctp"
+      - "2152/udp"
+      - "4997/udp"
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      core:
+        ipv4_address: ${NR_GNB_IP}
+  nr_ue:
+    #image: docker_ueransim
+    image: ghcr.io/herlesupreeth/docker_ueransim:master
+    container_name: nr_ue
+    depends_on:
+      - core
+      - nr_gnb
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./ueransim:/mnt/ueransim
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=ueransim-ue
+    expose:
+      - "4997/udp"
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      core:
+        ipv4_address: ${NR_UE_IP}
+#    networks:
+#      default:
+#        ipv4_address: ${NR_UE_IP}
+#networks:
+#  default:
+    #external: true
+    #name: docker_open5gs_default
+networks:
+  core:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/24
